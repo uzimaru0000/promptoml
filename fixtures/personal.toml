@@ -1,0 +1,29 @@
+start = "name"
+
+[state.name]
+type = "text"
+name = "name"
+message = "What is your name?"
+to = "age"
+
+[state.age]
+type = "text"
+name = "age"
+message = "What is your age?"
+to = "age_condition"
+
+[state.age_condition]
+type = "condition"
+name = "age_condition"
+condition = "$age > 18"
+branches = { true = "gender", false = "end" }
+
+[state.gender]
+type = "select"
+name = "gender"
+message = "What is your gender?"
+options = ["Male", "Female", "Other"]
+to = "end"
+
+[state.end]
+type = "done"

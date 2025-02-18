@@ -1,0 +1,82 @@
+start = "welcome"
+
+[state.welcome]
+type = "text"
+name = "name"
+message = "Welcome to the Project Setup Wizard. Please enter your username:"
+to = "check_root"
+
+[state.check_root]
+type = "condition"
+name = "check_root"
+condition = "$name == 'root'"
+branches = { true = "warn_root", false = "ask_password" }
+
+[state.warn_root]
+type = "confirm"
+name = "confirm_root"
+message = "You are running as root, proceed anyway?"
+to = "check_warn_root"
+
+[state.check_warn_root]
+type = "condition"
+name = "check_warn_root"
+condition = "$confirm_root == true"
+branches = { true = "ask_password", false = "done" }
+
+[state.ask_password]
+type = "password"
+name = "password"
+message = "Enter your password:"
+to = "ask_environment"
+
+[state.ask_environment]
+type = "select"
+name = "environment"
+message = "Select environment type:"
+options = ["development", "staging", "production"]
+to = "ask_features"
+
+[state.ask_features]
+type = "multi_select"
+name = "features"
+message = "Select features to enable (use space to toggle):"
+options = ["logging", "metrics", "notifications", "backup"]
+to = "ask_region"
+
+[state.ask_region]
+type = "fuzzy_select"
+name = "region"
+message = "Select region (start typing to filter):"
+options = [
+  "us-east-1",
+  "us-west-1",
+  "us-west-2",
+  "eu-central-1",
+  "eu-west-1",
+  "ap-northeast-1",
+  "ap-southeast-1",
+  "ap-southeast-2"
+]
+to = "check_production"
+
+[state.check_production]
+type = "condition"
+name = "check_production"
+condition = "$environment == 'production'"
+branches = { true = "confirm_production", false = "done" }
+
+[state.confirm_production]
+type = "confirm"
+name = "confirm_production"
+message = "Production environment can be risky. Proceed?"
+to = "check_confirm_production"
+
+[state.check_confirm_production]
+type = "condition"
+name = "check_confirm_production"
+condition = "$confirm_production == true"
+branches = { true = "done", false = "ask_environment" }
+
+[state.done]
+type = "done"

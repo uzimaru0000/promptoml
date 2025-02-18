@@ -1,0 +1,34 @@
+start = "guess"
+
+[state.guess]
+type = "text"
+name = "guess"
+message = "Guess a number between 1 and 100"
+to = "check"
+
+[state.check]
+type = "condition"
+name = "check"
+condition = "$guess == $args.number"
+branches = { true = "win", false = "order" }
+
+[state.order]
+type = "condition"
+name = "order"
+condition = "$guess < $args.number"
+branches = { true = "low", false = "high" }
+
+[state.low]
+type = "text"
+name = "guess"
+message = "Too low! Try again."
+to = "check"
+
+[state.high]
+type = "text"
+name = "guess"
+message = "Too high! Try again."
+to = "check"
+
+[state.win]
+type = "done"
