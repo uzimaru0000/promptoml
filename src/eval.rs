@@ -73,6 +73,36 @@ pub fn eval(expr: &Expr, context: &Context) -> Result<Value> {
                     )),
                 },
             }
+        },
+
+        Expr::Function { name, arg } => {
+            let arg_val = eval(arg, context)?;
+            match name.as_str() {
+                "keys" => {
+                    if let Value::Object(obj) = arg_val {
+                        Ok(Value::Array(
+                            obj.keys().map(|k| Value::String(k.clone())).collect(),
+                        ))
+                    } else {
+                        Err(Error::TypeError("keys function requires an object".to_string()))
+                    }
+                }
+                "len" => {
+                    if let Value::String(s) = arg_val {
+                        Ok(Value::Number(s.len() as f64))
+                    } else if let Value::Array(arr) = arg_val {
+                        Ok(Value::Number(arr.len() as f64))
+                    } else {
+                        Err(Error::TypeError(
+                            "len function requires a string or array".to_string(),
+                        ))
+                    }
+                }
+                _ => Err(Error::TypeError(format!(
+                    "Unknown function: {}",
+                    name
+                ))),
+            }
         }
     }
 }

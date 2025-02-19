@@ -125,6 +125,10 @@ pub enum Expr {
         op: UnaryOp,
         expr: Box<Expr>,
     },
+    Function {
+        name: String,
+        arg: Box<Expr>,
+    },
 }
 
 fn string_expr(s: &str) -> Expr {
@@ -168,8 +172,34 @@ fn parse_value(input: &str) -> IResult<&str, Expr> {
     ))(input)
 }
 
+fn parse_function(input: &str) -> IResult<&str, Expr> {
+    let (input, name) = take_while1(|c: char| c.is_alphanumeric() || c == '_')(input)?;
+    let (input, _) = preceded(
+        nom::character::complete::multispace0,
+        char('('),
+    )(input)?;
+    let (input, arg) = preceded(
+        nom::character::complete::multispace0,
+        parse_binary,
+    )(input)?;
+    let (input, _) = preceded(
+        nom::character::complete::multispace0,
+        char(')'),
+    )(input)?;
+
+    Ok((
+        input,
+        Expr::Function {
+            name: name.to_string(),
+            arg: Box::new(arg),
+        },
+    ))
+}
+
 fn parse_unary(input: &str) -> IResult<&str, Expr> {
     alt((
+        // Function expression
+        parse_function,
         // Dollar expression with optional dot access
         map(
             pair(
@@ -333,6 +363,32 @@ mod tests {
                     right: Box::new(Expr::Value(Value::Symbol("field".to_string()))),
                 }),
                 right: Box::new(Expr::Value(Value::Symbol("field".to_string()))),
+            })
+        );
+    }
+
+    #[test]
+    fn test_parse_function() {
+        assert_eq!(
+            parse("len('hello')"),
+            Ok(Expr::Function {
+                name: "len".to_string(),
+                arg: Box::new(Expr::Value(Value::String("hello".to_string()))),
+            })
+        );
+
+        assert_eq!(
+            parse("contains($state.name)"),
+            Ok(Expr::Function {
+                name: "contains".to_string(),
+                arg: Box::new(Expr::BinaryOp {
+                    op: BinOp::Dot,
+                    left: Box::new(Expr::UnaryOp {
+                        op: UnaryOp::Dollar,
+                        expr: Box::new(Expr::Value(Value::Symbol("state".to_string()))),
+                    }),
+                    right: Box::new(Expr::Value(Value::Symbol("name".to_string()))),
+                }),
             })
         );
     }

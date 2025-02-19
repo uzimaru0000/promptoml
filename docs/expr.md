@@ -28,11 +28,12 @@ condition = "$args.is_hoge"
 ## Def
 
 ```
-<Expr> ::= <Value> | <Eval>
+<Expr> ::= <Value> | <Eval> | <Function>
 <Value> ::= "'" <string> "'" | <number> | <boolean> | <symbol>
 <Eval> ::= <Expr> <Op> <Expr> | <SOp> <Expr>
 <Op> ::= <Eq> | <Ord> | "."
 <Eq> ::= "==" | "!="
 <Ord> ::= ">" | ">=" | "<" | "<="
 <SOp> ::= "$" | "!"
+<Function> ::= <symbol> "(" <Expr> ")"
 ```
