@@ -77,6 +77,8 @@ pub fn eval(expr: &Expr, context: &Context) -> Result<Value> {
 
         Expr::Function { name, arg } => {
             let arg_val = eval(arg, context)?;
+            println!("arg: {:?}", arg_val);
+
             match name.as_str() {
                 "keys" => {
                     if let Value::Object(obj) = arg_val {

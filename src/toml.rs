@@ -95,34 +95,55 @@ pub fn load(content: &str) -> Result<(String, HashMap<String, Node>)> {
                 message,
                 options,
                 to,
-            } => (
-                State::Prompt(PromptType::Select(SelectPrompt { message, options }), to),
-                name,
-            ),
+            } => {
+                let options = options
+                    .iter()
+                    .map(|s| parse(s))
+                    .collect::<Result<Vec<_>>>()?;
+
+                (
+                    State::Prompt(PromptType::Select(SelectPrompt { message, options }), to),
+                    name,
+                )
+            }
             StateConfig::MultiSelect {
                 name,
                 message,
                 options,
                 to,
-            } => (
-                State::Prompt(
-                    PromptType::MultiSelect(MultiSelectPrompt { message, options }),
-                    to,
-                ),
-                name,
-            ),
+            } => {
+                let options = options
+                    .iter()
+                    .map(|s| parse(s))
+                    .collect::<Result<Vec<_>>>()?;
+
+                (
+                    State::Prompt(
+                        PromptType::MultiSelect(MultiSelectPrompt { message, options }),
+                        to,
+                    ),
+                    name,
+                )
+            }
             StateConfig::FuzzySelect {
                 name,
                 message,
                 options,
                 to,
-            } => (
-                State::Prompt(
-                    PromptType::FuzzySelect(FuzzySelectPrompt { message, options }),
-                    to,
-                ),
-                name,
-            ),
+            } => {
+                let options = options
+                    .iter()
+                    .map(|s| parse(s))
+                    .collect::<Result<Vec<_>>>()?;
+
+                (
+                    State::Prompt(
+                        PromptType::FuzzySelect(FuzzySelectPrompt { message, options }),
+                        to,
+                    ),
+                    name,
+                )
+            }
             StateConfig::Condition {
                 name,
                 condition,

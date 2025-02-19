@@ -1,0 +1,11 @@
+start = "start"
+
+[state.start]
+type = "select"
+message = "Select a key"
+name = "key"
+options = ["keys($args.object)"]
+to = "end"
+
+[state.end]
+type = "done"
