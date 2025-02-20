@@ -5,6 +5,17 @@ type = "select"
 message = "Select a key"
 name = "key"
 options = ["keys($args.object)"]
+to = "set"
+
+[state.set]
+type = "set"
+name = "value"
+value = "$args.object[$key]"
+to = "remove"
+
+[state.remove]
+type = "remove"
+name = "key"
 to = "end"
 
 [state.end]

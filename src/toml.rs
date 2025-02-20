@@ -68,6 +68,17 @@ enum StateConfig {
         condition: String,
         branches: Table,
     },
+    #[serde(rename = "set")]
+    Set {
+        name: String,
+        value: String,
+        to: String,
+    },
+    #[serde(rename = "remove")]
+    Remove {
+        name: String,
+        to: String,
+    },
     #[serde(rename = "done")]
     Done,
 }
@@ -178,6 +189,13 @@ pub fn load(content: &str) -> Result<(String, HashMap<String, Node>)> {
                     }),
                     name,
                 )
+            }
+            StateConfig::Set { name, value, to } => {
+                let expr = parse(&value)?;
+                (State::Set(expr, to), name.clone())
+            }
+            StateConfig::Remove { name, to } => {
+                (State::Remove(to), name.clone())
             }
             StateConfig::Done => (State::Done, key.clone()),
         };

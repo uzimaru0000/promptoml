@@ -25,6 +25,9 @@ pub enum Error {
 
     #[error("Invalid transition: {0}")]
     InvalidTransition(String),
+
+    #[error("Index out of bounds: {0}")]
+    IndexOutOfBounds(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>; 

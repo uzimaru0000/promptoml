@@ -99,7 +99,7 @@ pub struct SelectPrompt {
 impl Prompt for SelectPrompt {
     fn run(&self, name: &str, context: &mut Context) -> Result<()> {
         let opts = self.options.iter().map(|expr| eval(expr, context)).collect::<Result<Vec<_>>>()?;
-        let opts = get_options(opts, context)?;
+        let opts = get_options(opts, context);
 
         let mut p = Listbox::new(&opts)
             .title(&self.message)
@@ -122,7 +122,7 @@ pub struct MultiSelectPrompt {
 impl Prompt for MultiSelectPrompt {
     fn run(&self, name: &str, context: &mut Context) -> Result<()> {
         let opts = self.options.iter().map(|expr| eval(expr, context)).collect::<Result<Vec<_>>>()?;
-        let opts = get_options(opts, context)?;
+        let opts = get_options(opts, context);
 
         let mut p = Checkbox::new(&opts)
             .title(&self.message)
@@ -144,7 +144,7 @@ pub struct FuzzySelectPrompt {
 impl Prompt for FuzzySelectPrompt {
     fn run(&self, name: &str, context: &mut Context) -> Result<()> {
         let options = self.options.iter().map(|expr| eval(expr, context)).collect::<Result<Vec<_>>>()?;
-        let opts = get_options(options, context)?;
+        let opts = get_options(options, context);
 
         let mut p = QuerySelector::new(&opts, |input, opts| {
             opts.into_iter()

@@ -5,6 +5,7 @@ use nom::{
     bytes::complete::{tag, take_while1},
     character::complete::{char, digit1},
     combinator::{map, opt, recognize},
+    multi::many0,
     sequence::{delimited, pair, preceded},
     IResult,
 };
@@ -69,18 +70,15 @@ impl PartialOrd for Value {
                 }
                 Some(l0.len().cmp(&r0.len()))
             }
-            (Self::String(l0), Self::Number(r0)) => {
-                l0.parse::<f64>().unwrap().partial_cmp(r0)
-            }
-            (Self::Number(l0), Self::String(r0)) => {
-                l0.partial_cmp(&r0.parse::<f64>().unwrap())
-            }
+            (Self::String(l0), Self::Number(r0)) => l0.parse::<f64>().unwrap().partial_cmp(r0),
+            (Self::Number(l0), Self::String(r0)) => l0.partial_cmp(&r0.parse::<f64>().unwrap()),
             _ => None,
         }
     }
 
     fn ge(&self, other: &Self) -> bool {
-        self.partial_cmp(other).unwrap() == Ordering::Greater || self.partial_cmp(other).unwrap() == Ordering::Equal
+        self.partial_cmp(other).unwrap() == Ordering::Greater
+            || self.partial_cmp(other).unwrap() == Ordering::Equal
     }
 
     fn gt(&self, other: &Self) -> bool {
@@ -88,7 +86,8 @@ impl PartialOrd for Value {
     }
 
     fn le(&self, other: &Self) -> bool {
-        self.partial_cmp(other).unwrap() == Ordering::Less || self.partial_cmp(other).unwrap() == Ordering::Equal
+        self.partial_cmp(other).unwrap() == Ordering::Less
+            || self.partial_cmp(other).unwrap() == Ordering::Equal
     }
 
     fn lt(&self, other: &Self) -> bool {
@@ -105,6 +104,7 @@ pub enum BinOp {
     Lt,
     Le,
     Dot,
+    Index,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -174,18 +174,9 @@ fn parse_value(input: &str) -> IResult<&str, Expr> {
 
 fn parse_function(input: &str) -> IResult<&str, Expr> {
     let (input, name) = take_while1(|c: char| c.is_alphanumeric() || c == '_')(input)?;
-    let (input, _) = preceded(
-        nom::character::complete::multispace0,
-        char('('),
-    )(input)?;
-    let (input, arg) = preceded(
-        nom::character::complete::multispace0,
-        parse_binary,
-    )(input)?;
-    let (input, _) = preceded(
-        nom::character::complete::multispace0,
-        char(')'),
-    )(input)?;
+    let (input, _) = preceded(nom::character::complete::multispace0, char('('))(input)?;
+    let (input, arg) = preceded(nom::character::complete::multispace0, parse_binary)(input)?;
+    let (input, _) = preceded(nom::character::complete::multispace0, char(')'))(input)?;
 
     Ok((
         input,
@@ -200,30 +191,45 @@ fn parse_unary(input: &str) -> IResult<&str, Expr> {
     alt((
         // Function expression
         parse_function,
-        // Dollar expression with optional dot access
+        // Dollar expression with optional dot or index access
         map(
             pair(
                 preceded(char('$'), parse_value),
-                opt(preceded(
-                    preceded(nom::character::complete::multispace0, char('.')),
-                    parse_value,
-                )),
+                many0(alt((
+                    // ドットアクセス
+                    map(
+                        preceded(
+                            preceded(nom::character::complete::multispace0, char('.')),
+                            parse_value,
+                        ),
+                        |field| (BinOp::Dot, field),
+                    ),
+                    // インデックスアクセス
+                    map(
+                        delimited(
+                            preceded(nom::character::complete::multispace0, char('[')),
+                            parse_binary,
+                            preceded(nom::character::complete::multispace0, char(']')),
+                        ),
+                        |expr| (BinOp::Index, expr),
+                    ),
+                ))),
             ),
-            |(expr, field)| {
-                let dollar_expr = Expr::UnaryOp {
+            |(expr, accesses)| {
+                let mut result = Expr::UnaryOp {
                     op: UnaryOp::Dollar,
                     expr: Box::new(expr),
                 };
 
-                if let Some(field_expr) = field {
-                    Expr::BinaryOp {
-                        op: BinOp::Dot,
-                        left: Box::new(dollar_expr),
-                        right: Box::new(field_expr),
-                    }
-                } else {
-                    dollar_expr
+                for (op, access_expr) in accesses {
+                    result = Expr::BinaryOp {
+                        op,
+                        left: Box::new(result),
+                        right: Box::new(access_expr),
+                    };
                 }
+
+                result
             },
         ),
         // Not expression
@@ -388,6 +394,44 @@ mod tests {
                         expr: Box::new(Expr::Value(Value::Symbol("state".to_string()))),
                     }),
                     right: Box::new(Expr::Value(Value::Symbol("name".to_string()))),
+                }),
+            })
+        );
+    }
+
+    #[test]
+    fn test_parse_index_access() {
+        assert_eq!(
+            parse("$args.users['admin']"),
+            Ok(Expr::BinaryOp {
+                op: BinOp::Index,
+                left: Box::new(Expr::BinaryOp {
+                    op: BinOp::Dot,
+                    left: Box::new(Expr::UnaryOp {
+                        op: UnaryOp::Dollar,
+                        expr: Box::new(Expr::Value(Value::Symbol("args".to_string()))),
+                    }),
+                    right: Box::new(Expr::Value(Value::Symbol("users".to_string()))),
+                }),
+                right: Box::new(Expr::Value(Value::String("admin".to_string()))),
+            })
+        );
+
+        assert_eq!(
+            parse("$args.data[$key]"),
+            Ok(Expr::BinaryOp {
+                op: BinOp::Index,
+                left: Box::new(Expr::BinaryOp {
+                    op: BinOp::Dot,
+                    left: Box::new(Expr::UnaryOp {
+                        op: UnaryOp::Dollar,
+                        expr: Box::new(Expr::Value(Value::Symbol("args".to_string()))),
+                    }),
+                    right: Box::new(Expr::Value(Value::Symbol("data".to_string()))),
+                }),
+                right: Box::new(Expr::UnaryOp {
+                    op: UnaryOp::Dollar,
+                    expr: Box::new(Expr::Value(Value::Symbol("key".to_string()))),
                 }),
             })
         );

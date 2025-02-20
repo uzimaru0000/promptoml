@@ -20,6 +20,10 @@ impl Context {
     pub fn get_context(&self) -> &HashMap<String, Value> {
         &self.variables
     }
+
+    pub fn remove_variable(&mut self, name: String) {
+        self.variables.remove(&name);
+    }
 }
 
 pub fn eval(expr: &Expr, context: &Context) -> Result<Value> {
@@ -72,13 +76,34 @@ pub fn eval(expr: &Expr, context: &Context) -> Result<Value> {
                         "Dot operator requires an object and a field name".to_string(),
                     )),
                 },
+                BinOp::Index => match (&left_val, &right_val) {
+                    (Value::Array(arr), Value::Number(index)) => {
+                        let index = (*index) as usize;
+                        arr.get(index).cloned().ok_or_else(|| {
+                            Error::IndexOutOfBounds(format!("Index {} is out of bounds", index))
+                        })
+                    }
+                    (Value::String(s), Value::Number(index)) => {
+                        let index = (*index) as usize;
+                        let c = s.chars().nth(index).ok_or_else(|| {
+                            Error::IndexOutOfBounds(format!("Index {} is out of bounds", index))
+                        })?;
+                        Ok(Value::String(c.to_string()))
+                    }
+                    (Value::Object(obj), Value::String(field)) => {
+                        obj.get(field).cloned().ok_or_else(|| {
+                            Error::TypeError(format!("Field '{}' not found in object", field))
+                        })
+                    }
+                    _ => Err(Error::TypeError(
+                        "Index operator requires an array and a number".to_string(),
+                    )),
+                },
             }
         },
 
         Expr::Function { name, arg } => {
             let arg_val = eval(arg, context)?;
-            println!("arg: {:?}", arg_val);
-
             match name.as_str() {
                 "keys" => {
                     if let Value::Object(obj) = arg_val {
@@ -140,5 +165,35 @@ mod tests {
             eval(&expr, &context).unwrap(),
             Value::String("Hello World".to_string())
         );
+    }
+
+    #[test]
+    fn test_eval_index() {
+        let mut context = Context::new(HashMap::new());
+        context.set_variable("x".to_string(), Value::Array(vec![
+            Value::String("Hello".to_string()),
+            Value::String("World".to_string()),
+        ]));
+
+        let expr = parse("$x[0]").unwrap();
+        assert_eq!(eval(&expr, &context).unwrap(), Value::String("Hello".to_string()));
+    }
+
+    #[test]
+    fn test_eval_index_out_of_bounds() {
+        let mut context = Context::new(HashMap::new());
+        context.set_variable("x".to_string(), Value::Array(vec![]));
+
+        let expr = parse("$x[0]").unwrap();
+        assert_eq!(eval(&expr, &context).unwrap_err(), Error::IndexOutOfBounds("Index 0 is out of bounds".to_string()));
+    }
+
+    #[test]
+    fn test_eval_index_string() {
+        let mut context = Context::new(HashMap::new());
+        context.set_variable("x".to_string(), Value::String("Hello".to_string()));
+
+        let expr = parse("$x[0]").unwrap();
+        assert_eq!(eval(&expr, &context).unwrap(), Value::String("H".to_string()));
     }
 }

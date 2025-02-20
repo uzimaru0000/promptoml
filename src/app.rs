@@ -59,18 +59,20 @@ impl App {
 
 fn to_state_value(value: HashMap<String, serde_json::Value>) -> HashMap<String, Value> {
         value
-            .into_iter()
-            .map(|(k, v)| match v {
-                serde_json::Value::String(s) => (k, Value::String(s)),
-                serde_json::Value::Number(n) => (k, Value::Number(n.as_f64().unwrap())),
-                serde_json::Value::Bool(b) => (k, Value::Boolean(b)),
-                serde_json::Value::Object(o) => (
-                    k,
-                    Value::Object(to_state_value(o.into_iter().collect())),
-                ),
-            _ => (k, Value::String(v.to_string())),
-        })
+        .into_iter()
+        .map(|(k, v)| (k, inner_to_state_value(v)))
         .collect()
+}
+
+fn inner_to_state_value(value: serde_json::Value) -> Value {
+    match value {
+        serde_json::Value::String(s) => Value::String(s),
+        serde_json::Value::Number(n) => Value::Number(n.as_f64().unwrap()),
+        serde_json::Value::Bool(b) => Value::Boolean(b),
+        serde_json::Value::Object(o) => Value::Object(to_state_value(o.into_iter().collect())),
+        serde_json::Value::Array(a) => Value::Array(a.into_iter().map(inner_to_state_value).collect()),
+        _ => Value::String(value.to_string()),
+    }
 }
 
 fn to_serde_json(value: Value) -> serde_json::Value {

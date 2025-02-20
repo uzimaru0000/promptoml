@@ -3,7 +3,8 @@ use std::collections::HashMap;
 use crate::{
     condition::Condition,
     error::{Error, Result},
-    eval::Context,
+    eval::{eval, Context},
+    parser::Expr,
     prompt::{Prompt, PromptType},
 };
 
@@ -11,6 +12,8 @@ use crate::{
 pub enum State {
     Prompt(PromptType, String),
     Condition(Condition),
+    Set(Expr, String),
+    Remove(String),
     Done,
 }
 
@@ -56,6 +59,21 @@ impl StateMachine {
                                 "Invalid transition from {} to {}",
                                 current_node.name, result
                             )))?;
+                }
+                State::Set(expr, to) => {
+                    let value = eval(expr, &self.context)?;
+                    self.context.set_variable(current_node.name.clone(), value);
+                    current_node = self.nodes.get(to).ok_or(Error::InvalidTransition(format!(
+                        "Invalid transition from {} to {}",
+                        current_node.name, to
+                    )))?;
+                }
+                State::Remove(to) => {
+                    self.context.remove_variable(current_node.name.clone());
+                    current_node = self.nodes.get(to).ok_or(Error::InvalidTransition(format!(
+                        "Invalid transition from {} to {}",
+                        current_node.name, to
+                    )))?;
                 }
                 State::Done => {
                     break;
