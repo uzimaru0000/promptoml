@@ -102,11 +102,16 @@ pub fn eval(expr: &Expr, context: &Context) -> Result<Value> {
             }
         },
 
-        Expr::Function { name, arg } => {
-            let arg_val = eval(arg, context)?;
+        Expr::Function { name, args } => {
+            let mut arg_vals = Vec::new();
+            for arg in args {
+                let arg_val = eval(&arg, context)?;
+                arg_vals.push(arg_val);
+            }
+
             match name.as_str() {
                 "keys" => {
-                    if let Value::Object(obj) = arg_val {
+                    if let Some(Value::Object(obj)) = arg_vals.get(0) {
                         Ok(Value::Array(
                             obj.keys().map(|k| Value::String(k.clone())).collect(),
                         ))
@@ -115,14 +120,22 @@ pub fn eval(expr: &Expr, context: &Context) -> Result<Value> {
                     }
                 }
                 "len" => {
-                    if let Value::String(s) = arg_val {
+                    if let Some(Value::String(s)) = arg_vals.get(0) {
                         Ok(Value::Number(s.len() as f64))
-                    } else if let Value::Array(arr) = arg_val {
+                    } else if let Some(Value::Array(arr)) = arg_vals.get(0) {
                         Ok(Value::Number(arr.len() as f64))
                     } else {
                         Err(Error::TypeError(
                             "len function requires a string or array".to_string(),
                         ))
+                    }
+                }
+                "split" => {
+                    match (arg_vals.get(0), arg_vals.get(1)) {
+                        (Some(Value::String(s)), Some(Value::String(sep))) => {
+                            Ok(Value::Array(s.split(sep).map(|s| Value::String(s.to_string())).collect()))
+                        }
+                        _ => Err(Error::TypeError("split function requires a string and a separator".to_string())),
                     }
                 }
                 _ => Err(Error::TypeError(format!(
@@ -195,5 +208,44 @@ mod tests {
 
         let expr = parse("$x[0]").unwrap();
         assert_eq!(eval(&expr, &context).unwrap(), Value::String("H".to_string()));
+    }
+
+    #[test]
+    fn test_eval_function_keys() {
+        let mut context = Context::new(HashMap::new());
+        context.set_variable("obj".to_string(), Value::Object(HashMap::from([
+            ("key1".to_string(), Value::String("value1".to_string())),
+            ("key2".to_string(), Value::String("value2".to_string())),
+        ])));
+
+        let expr = parse("keys($obj)").unwrap();
+        assert_eq!(eval(&expr, &context).unwrap(), Value::Array(vec![
+            Value::String("key1".to_string()),
+            Value::String("key2".to_string()),
+        ]));
+    }
+
+    #[test]
+    fn test_eval_function_len() {
+        let mut context = Context::new(HashMap::new());
+        context.set_variable("arr".to_string(), Value::Array(vec![
+            Value::String("Hello".to_string()),
+            Value::String("World".to_string()),
+        ]));
+
+        let expr = parse("len($arr)").unwrap();
+        assert_eq!(eval(&expr, &context).unwrap(), Value::Number(2.0));
+    }
+
+    #[test]
+    fn test_eval_function_split() {
+        let mut context = Context::new(HashMap::new());
+        context.set_variable("str".to_string(), Value::String("Hello,World".to_string()));
+        
+        let expr = parse("split($str, ',')").unwrap();
+        assert_eq!(eval(&expr, &context).unwrap(), Value::Array(vec![
+            Value::String("Hello".to_string()),
+            Value::String("World".to_string()),
+        ]));
     }
 }

@@ -1,0 +1,120 @@
+start = "list_buckets"
+
+[state.list_buckets]
+type = "set"
+name = "buckets"
+value = "$args.buckets"
+to = "select_bucket"
+
+[state.select_bucket]
+type = "fuzzy_select"
+name = "bucket"
+message = "操作したいバケットを選択してください"
+options = ["$buckets"]
+to = "select_bucket_operation"
+
+[state.select_bucket_operation]
+type = "select"
+name = "bucket_operation"
+message = "バケットに対する操作を選択してください"
+options = [
+    "edit_bucket_policy",
+    "edit_versioning",
+    "edit_encryption",
+    "delete_bucket"
+]
+to = "check_bucket_operation"
+
+[state.check_bucket_operation]
+type = "condition"
+condition = "$bucket_operation == 'edit_bucket_policy'"
+branches = { true = "edit_bucket_policy", false = "check_versioning" }
+
+[state.check_versioning]
+type = "condition"
+condition = "$bucket_operation == 'edit_versioning'"
+branches = { true = "edit_versioning", false = "check_encryption" }
+
+[state.check_encryption]
+type = "condition"
+condition = "$bucket_operation == 'edit_encryption'"
+branches = { true = "edit_encryption", false = "check_delete_bucket" }
+
+[state.check_delete_bucket]
+type = "condition"
+condition = "$bucket_operation == 'delete_bucket'"
+branches = { true = "confirm_delete_bucket", false = "other_bucket_operations" }
+
+[state.confirm_delete_bucket]
+type = "confirm"
+name = "confirm_delete"
+message = "本当にバケットを削除しますか？"
+to = "check_delete_confirmation"
+
+[state.check_delete_confirmation]
+type = "condition"
+condition = "$confirm_delete == true"
+branches = { true = "delete_bucket", false = "select_bucket_operation" }
+
+[state.delete_bucket]
+type = "set"
+name = "command"
+value = "delete_bucket"
+to = "done"
+
+[state.select_object]
+type = "fuzzy_select"
+name = "object"
+message = "操作したいオブジェクトを選択してください"
+options = ["$objects"]
+to = "select_object_operation"
+
+[state.select_object_operation]
+type = "select"
+name = "object_operation"
+message = "オブジェクトに対する操作を選択してください"
+options = [
+    "download",
+    "delete",
+    "edit_acl",
+    "edit_metadata",
+    "copy_move"
+]
+to = "check_object_operation"
+
+[state.check_object_operation]
+type = "condition"
+condition = "$object_operation == 'delete'"
+branches = { true = "confirm_delete_object", false = "other_object_operations" }
+
+[state.confirm_delete_object]
+type = "confirm"
+name = "confirm_delete"
+message = "本当にオブジェクトを削除しますか？"
+to = "check_object_delete_confirmation"
+
+[state.check_object_delete_confirmation]
+type = "condition"
+condition = "$confirm_delete == true"
+branches = { true = "delete_object", false = "select_object_operation" }
+
+[state.delete_object]
+type = "set"
+name = "command"
+value = "delete_object"
+to = "done"
+
+[state.other_bucket_operations]
+type = "set"
+name = "result"
+value = "$bucket_operation"
+to = "done"
+
+[state.other_object_operations]
+type = "set"
+name = "result"
+value = "$object_operation"
+to = "done"
+
+[state.done]
+type = "done" 

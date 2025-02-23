@@ -64,7 +64,6 @@ enum StateConfig {
     },
     #[serde(rename = "condition")]
     Condition {
-        name: String,
         condition: String,
         branches: Table,
     },
@@ -156,7 +155,6 @@ pub fn load(content: &str) -> Result<(String, HashMap<String, Node>)> {
                 )
             }
             StateConfig::Condition {
-                name,
                 condition,
                 branches,
             } => {
@@ -187,7 +185,7 @@ pub fn load(content: &str) -> Result<(String, HashMap<String, Node>)> {
                         condition,
                         branches: parsed_branches,
                     }),
-                    name,
+                    key.clone(),
                 )
             }
             StateConfig::Set { name, value, to } => {

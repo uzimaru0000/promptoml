@@ -1,0 +1,34 @@
+start = "input_numbers"
+
+[state.input_numbers]
+type = "text"
+name = "numbers"
+message = "カンマ区切りで数字を入力してください (例: 1,2,3,4,5)"
+to = "set_array"
+
+[state.set_array]
+type = "set"
+name = "array"
+value = "split($numbers, ',')"
+to = "ask_threshold"
+
+[state.ask_threshold]
+type = "text"
+name = "threshold"
+message = "フィルタリングする閾値を入力してください"
+to = "filter"
+
+[state.filter]
+type = "condition"
+name = "filter"
+condition = "$array > $threshold"
+branches = { true = "show_result", false = "input_numbers" }
+
+[state.show_result]
+type = "text"
+name = "result"
+message = "閾値より大きい数字: $array"
+to = "end"
+
+[state.end]
+type = "done" 

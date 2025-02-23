@@ -8,6 +8,7 @@ use nom::{
     multi::many0,
     sequence::{delimited, pair, preceded},
     IResult,
+    multi::separated_list1,
 };
 
 use crate::error::{Error, Result};
@@ -127,7 +128,7 @@ pub enum Expr {
     },
     Function {
         name: String,
-        arg: Box<Expr>,
+        args: Vec<Expr>,
     },
 }
 
@@ -147,8 +148,37 @@ fn symbol_expr(s: &str) -> Expr {
     Expr::Value(Value::Symbol(s.to_string()))
 }
 
+fn parse_array(input: &str) -> IResult<&str, Expr> {
+    let (input, _) = char('[')(input)?;
+    let (input, _) = nom::character::complete::multispace0(input)?;
+    
+    let (input, elements) = opt(separated_list1(
+        delimited(
+            nom::character::complete::multispace0,
+            char(','),
+            nom::character::complete::multispace0
+        ),
+        parse_binary
+    ))(input)?;
+    
+    let (input, _) = nom::character::complete::multispace0(input)?;
+    let (input, _) = char(']')(input)?;
+
+    let elements = elements.unwrap_or_default();
+    Ok((input, Expr::Value(Value::Array(
+        elements.into_iter()
+            .map(|expr| match expr {
+                Expr::Value(v) => v,
+                _ => panic!("Array elements must be values")
+            })
+            .collect()
+    ))))
+}
+
 fn parse_value(input: &str) -> IResult<&str, Expr> {
     alt((
+        // Array
+        parse_array,
         // String
         map(
             delimited(char('\''), take_while1(|c| c != '\''), char('\'')),
@@ -175,14 +205,27 @@ fn parse_value(input: &str) -> IResult<&str, Expr> {
 fn parse_function(input: &str) -> IResult<&str, Expr> {
     let (input, name) = take_while1(|c: char| c.is_alphanumeric() || c == '_')(input)?;
     let (input, _) = preceded(nom::character::complete::multispace0, char('('))(input)?;
-    let (input, arg) = preceded(nom::character::complete::multispace0, parse_binary)(input)?;
+    
+    // 最初の引数をパース
+    let (input, first_arg) = preceded(nom::character::complete::multispace0, parse_binary)(input)?;
+    
+    // 残りの引数をパース（カンマ区切り）
+    let (input, args) = many0(|input| {
+        let (input, _) = preceded(nom::character::complete::multispace0, char(','))(input)?;
+        preceded(nom::character::complete::multispace0, parse_binary)(input)
+    })(input)?;
+    
     let (input, _) = preceded(nom::character::complete::multispace0, char(')'))(input)?;
+
+    // 全ての引数を1つの配列にまとめる
+    let mut all_args = vec![first_arg];
+    all_args.extend(args);
 
     Ok((
         input,
         Expr::Function {
             name: name.to_string(),
-            arg: Box::new(arg),
+            args: all_args,
         },
     ))
 }
@@ -379,7 +422,7 @@ mod tests {
             parse("len('hello')"),
             Ok(Expr::Function {
                 name: "len".to_string(),
-                arg: Box::new(Expr::Value(Value::String("hello".to_string()))),
+                args: vec![Expr::Value(Value::String("hello".to_string()))],
             })
         );
 
@@ -387,14 +430,16 @@ mod tests {
             parse("contains($state.name)"),
             Ok(Expr::Function {
                 name: "contains".to_string(),
-                arg: Box::new(Expr::BinaryOp {
-                    op: BinOp::Dot,
-                    left: Box::new(Expr::UnaryOp {
-                        op: UnaryOp::Dollar,
-                        expr: Box::new(Expr::Value(Value::Symbol("state".to_string()))),
-                    }),
-                    right: Box::new(Expr::Value(Value::Symbol("name".to_string()))),
-                }),
+                args: vec![
+                    Expr::BinaryOp {
+                        op: BinOp::Dot,
+                        left: Box::new(Expr::UnaryOp {
+                            op: UnaryOp::Dollar,
+                            expr: Box::new(Expr::Value(Value::Symbol("state".to_string()))),
+                        }),
+                        right: Box::new(Expr::Value(Value::Symbol("name".to_string()))),
+                    }
+                ],
             })
         );
     }
@@ -433,6 +478,96 @@ mod tests {
                     op: UnaryOp::Dollar,
                     expr: Box::new(Expr::Value(Value::Symbol("key".to_string()))),
                 }),
+            })
+        );
+    }
+
+    #[test]
+    fn test_parse_array() {
+        assert_eq!(
+            parse("[1, 2, 3]"),
+            Ok(Expr::Value(Value::Array(vec![
+                Value::Number(1.0),
+                Value::Number(2.0),
+                Value::Number(3.0),
+            ])))
+        );
+
+        assert_eq!(
+            parse("['a', 'b', 'c']"),
+            Ok(Expr::Value(Value::Array(vec![
+                Value::String("a".to_string()),
+                Value::String("b".to_string()),
+                Value::String("c".to_string()),
+            ])))
+        );
+
+        // 空配列のテスト
+        assert_eq!(
+            parse("[]"),
+            Ok(Expr::Value(Value::Array(vec![])))
+        );
+
+        // 混合型配列のテスト
+        assert_eq!(
+            parse("['text', 123, true]"),
+            Ok(Expr::Value(Value::Array(vec![
+                Value::String("text".to_string()),
+                Value::Number(123.0),
+                Value::Boolean(true),
+            ])))
+        );
+    }
+
+    #[test]
+    fn test_array_in_expression() {
+        assert_eq!(
+            parse("$data[0]"),
+            Ok(Expr::BinaryOp {
+                op: BinOp::Index,
+                left: Box::new(Expr::UnaryOp {
+                    op: UnaryOp::Dollar,
+                    expr: Box::new(Expr::Value(Value::Symbol("data".to_string()))),
+                }),
+                right: Box::new(Expr::Value(Value::Number(0.0))),
+            })
+        );
+    }
+
+    #[test]
+    fn test_parse_function_multiple_args() {
+        assert_eq!(
+            parse("concat($array1, $array2)"),
+            Ok(Expr::Function {
+                name: "concat".to_string(),
+                args: vec![
+                    Expr::UnaryOp {
+                        op: UnaryOp::Dollar,
+                        expr: Box::new(Expr::Value(Value::Symbol("array1".to_string()))),
+                    },
+                    Expr::UnaryOp {
+                        op: UnaryOp::Dollar,
+                        expr: Box::new(Expr::Value(Value::Symbol("array2".to_string()))),
+                    },
+                ],
+            })
+        );
+
+        assert_eq!(
+            parse("join($array, ', ', $suffix)"),
+            Ok(Expr::Function {
+                name: "join".to_string(),
+                args: vec![
+                    Expr::UnaryOp {
+                        op: UnaryOp::Dollar,
+                        expr: Box::new(Expr::Value(Value::Symbol("array".to_string()))),
+                    },
+                    Expr::Value(Value::String(", ".to_string())),
+                    Expr::UnaryOp {
+                        op: UnaryOp::Dollar,
+                        expr: Box::new(Expr::Value(Value::Symbol("suffix".to_string()))),
+                    },
+                ],
             })
         );
     }
