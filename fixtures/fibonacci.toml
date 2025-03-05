@@ -1,0 +1,63 @@
+start = "intro"
+
+[state.intro]
+type = "confirm"
+name = "dummy"
+message = "フィボナッチ数列計算プログラムへようこそ"
+to = "init_a"
+
+[state.init_a]
+type = "set"
+name = "a"
+value = "0"
+to = "init_b"
+
+[state.init_b]
+type = "set"
+name = "b"
+value = "1"
+to = "ask_n"
+
+[state.ask_n]
+type = "text"
+name = "n"
+message = "何番目のフィボナッチ数を計算しますか？（1以上の整数を入力）"
+to = "init_i"
+
+[state.init_i]
+type = "set"
+name = "i"
+value = "1"
+to = "check_loop"
+
+[state.check_loop]
+type = "condition"
+condition = "$i < $n"
+branches = { true = "calc_next", false = "end" }
+
+[state.calc_next]
+type = "set"
+name = "temp"
+value = "$a"
+to = "update_a"
+
+[state.update_a]
+type = "set"
+name = "a"
+value = "$b"
+to = "update_b"
+
+[state.update_b]
+type = "set"
+name = "b"
+value = "$temp + $b"
+to = "update_i"
+
+[state.update_i]
+type = "set"
+name = "i"
+value = "$i + 1"
+to = "check_loop"
+
+[state.end]
+type = "done" 

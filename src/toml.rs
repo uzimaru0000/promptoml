@@ -4,14 +4,10 @@ use serde::Deserialize;
 use toml::Table;
 
 use crate::{
-    condition::Condition,
-    error::{Error, Result},
-    parser::parse,
-    prompt::{
+    condition::Condition, error::{Error, Result}, goto::Goto, parser::parse, prompt::{
         ConfirmPrompt, FuzzySelectPrompt, MultiSelectPrompt, PasswordPrompt, PromptType,
         SelectPrompt, TextPrompt,
-    },
-    state::{Node, State},
+    }, state::{Node, State}
 };
 
 #[derive(Debug, Deserialize)]
@@ -66,6 +62,10 @@ enum StateConfig {
     Condition {
         condition: String,
         branches: Table,
+    },
+    #[serde(rename = "goto")]
+    Goto {
+        target: String,
     },
     #[serde(rename = "set")]
     Set {
@@ -188,6 +188,10 @@ pub fn load(content: &str) -> Result<(String, HashMap<String, Node>)> {
                     key.clone(),
                 )
             }
+            StateConfig::Goto { target } => (
+                State::Goto(Goto::new(parse(&target)?)),
+                key.clone(),
+            ),
             StateConfig::Set { name, value, to } => {
                 let expr = parse(&value)?;
                 (State::Set(expr, to), name.clone())

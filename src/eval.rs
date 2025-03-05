@@ -99,6 +99,10 @@ pub fn eval(expr: &Expr, context: &Context) -> Result<Value> {
                         "Index operator requires an array and a number".to_string(),
                     )),
                 },
+                BinOp::Add => add(&left_val, &right_val),
+                BinOp::Sub => sub(&left_val, &right_val),
+                BinOp::Mul => mul(&left_val, &right_val),
+                BinOp::Div => div(&left_val, &right_val),
             }
         },
 
@@ -147,6 +151,34 @@ pub fn eval(expr: &Expr, context: &Context) -> Result<Value> {
     }
 }
 
+fn add(left: &Value, right: &Value) -> Result<Value> {
+    match (left, right) {
+        (Value::Number(l), Value::Number(r)) => Ok(Value::Number(l + r)),
+        _ => Err(Error::TypeError("Add operator requires two numbers".to_string())),
+    }
+}
+
+fn sub(left: &Value, right: &Value) -> Result<Value> {
+    match (left, right) {
+        (Value::Number(l), Value::Number(r)) => Ok(Value::Number(l - r)),
+        _ => Err(Error::TypeError("Sub operator requires two numbers".to_string())),
+    }
+}
+
+fn mul(left: &Value, right: &Value) -> Result<Value> {
+    match (left, right) {
+        (Value::Number(l), Value::Number(r)) => Ok(Value::Number(l * r)),
+        _ => Err(Error::TypeError("Mul operator requires two numbers".to_string())),
+    }
+}
+
+fn div(left: &Value, right: &Value) -> Result<Value> {
+    match (left, right) {
+        (Value::Number(l), Value::Number(r)) => Ok(Value::Number(l / r)),
+        _ => Err(Error::TypeError("Div operator requires two numbers".to_string())),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -180,6 +212,44 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_eval_arithmetic() {
+        let mut context = Context::new(HashMap::new());
+        context.set_variable("x".to_string(), Value::Number(10.0));
+        context.set_variable("y".to_string(), Value::Number(2.0));
+
+        let expr = parse("$x + $y").unwrap();
+        assert_eq!(eval(&expr, &context).unwrap(), Value::Number(12.0));
+
+        let expr = parse("$x - $y").unwrap();
+        assert_eq!(eval(&expr, &context).unwrap(), Value::Number(8.0));
+
+        let expr = parse("$x * $y").unwrap();
+        assert_eq!(eval(&expr, &context).unwrap(), Value::Number(20.0));
+
+        let expr = parse("$x / $y").unwrap();
+        assert_eq!(eval(&expr, &context).unwrap(), Value::Number(5.0));
+    }
+
+    #[test]
+    fn test_eval_complex_arithmetic() {
+        let mut context = Context::new(HashMap::new());
+        context.set_variable("x".to_string(), Value::Number(10.0));
+        context.set_variable("y".to_string(), Value::Number(2.0));
+
+        let expr = parse("($x + $y) * 2").unwrap();
+        assert_eq!(eval(&expr, &context).unwrap(), Value::Number(24.0));
+
+        let expr = parse("($x - $y) / 2").unwrap();
+        assert_eq!(eval(&expr, &context).unwrap(), Value::Number(4.0));
+    
+        let expr = parse("($x * $y) + $x").unwrap();
+        assert_eq!(eval(&expr, &context).unwrap(), Value::Number(30.0));
+
+        let expr = parse("$x + $y * 2").unwrap();
+        assert_eq!(eval(&expr, &context).unwrap(), Value::Number(14.0));
+    }
+    
     #[test]
     fn test_eval_index() {
         let mut context = Context::new(HashMap::new());

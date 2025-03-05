@@ -77,13 +77,21 @@ options = ["rollback", "deploy", "destroy"]
 ```
 
 ### Condition 
-条件式を評価して状態遷移する先を選択できるNodeです
+`condition` を評価して得た値の key に一致した branch に移動します
 
 ```toml
 type = "condition"
 name = "check_operation"
 condition = "$operation == 'destroy'"
 branches = { true = "confirm_destroy", false = "end" }
+```
+
+### Goto
+`target` に指定した Node に移動します。
+
+```toml
+type = "goto"
+target = "$next_node"
 ```
 
 ### Set
@@ -117,12 +125,19 @@ type = "done"
 ```
 <expr>         ::= <binary_expr>
 
-<binary_expr>  ::= <unary_expr> [ <bin_op> <unary_expr> ]
+<binary_expr>  ::= <arithmetic_expr>
+
+<arithmetic_expr> ::= <term> { ("+" | "-") <term> }
+
+<term>         ::= <factor> { ("*" | "/") <factor> }
+
+<factor>       ::= <unary_expr>
 
 <unary_expr>   ::= <function>
                  | <dollar_expr>
                  | "!" <value>
                  | <value>
+                 | "(" <binary_expr> ")"
 
 <dollar_expr>  ::= "$" <value> { <access> }
 <access>       ::= "." <value>
@@ -144,6 +159,29 @@ type = "done"
 <symbol>       ::= <letter_or_digit_or_underscore> { <letter_or_digit_or_underscore> }
 
 <bin_op>       ::= "==" | "!=" | ">=" | ">" | "<=" | "<" | "."
+```
+
+### 四則演算
+
+式の中で以下の四則演算子を使用できます：
+
+- `+` : 加算
+- `-` : 減算
+- `*` : 乗算
+- `/` : 除算
+
+使用例：
+
+```toml
+[state.calculate]
+type = "set"
+name = "result"
+value = "$value1 + $value2 * 5"
+
+[state.complex_calculation]
+type = "set"
+name = "total"
+value = "($base + $tax) * $quantity"
 ```
 
 ### 組み込み関数

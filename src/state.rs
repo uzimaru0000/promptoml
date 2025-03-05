@@ -6,12 +6,14 @@ use crate::{
     eval::{eval, Context},
     parser::Expr,
     prompt::{Prompt, PromptType},
+    goto::Goto,
 };
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum State {
     Prompt(PromptType, String),
     Condition(Condition),
+    Goto(Goto),
     Set(Expr, String),
     Remove(String),
     Done,
@@ -59,6 +61,14 @@ impl StateMachine {
                                 "Invalid transition from {} to {}",
                                 current_node.name, result
                             )))?;
+                }
+                State::Goto(goto) => {
+                    let target = goto.eval(&self.context)?;
+
+                    current_node = self.nodes.get(&target).ok_or(Error::InvalidTransition(format!(
+                        "Invalid transition from {} to {}",
+                        current_node.name, target
+                    )))?;
                 }
                 State::Set(expr, to) => {
                     let value = eval(expr, &self.context)?;

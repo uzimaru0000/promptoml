@@ -30,8 +30,23 @@ impl Condition {
                         .ok_or(Error::MissingBranch("false".to_string()))?)
                 }
             }
+            Value::String(s) => {
+                self.branches
+                    .get(&s)
+                    .ok_or(Error::MissingBranch(s.clone()))
+            }
+            Value::Symbol(s) => {
+                self.branches
+                    .get(&s)
+                    .ok_or(Error::MissingBranch(s.clone()))
+            }
+            Value::Number(n) => {
+                self.branches
+                    .get(&n.to_string())
+                    .ok_or(Error::MissingBranch(n.to_string()))
+            }
             _ => Err(Error::TypeError(
-                "Condition must evaluate to a boolean".to_string(),
+                "Condition must evaluate to a string".to_string(),
             )),
         }?;
 
@@ -102,9 +117,64 @@ mod tests {
     }
 
     #[test]
-    fn test_condition_eval_type_error() {
+    fn test_condition_eval_string() {
         let cond = Condition {
             condition: Expr::Value(Value::String("true".to_string())),
+            branches: HashMap::from([
+                (
+                    "true".to_string(),
+                    Expr::Value(Value::String("true".to_string())),
+                ),
+                (
+                    "false".to_string(),
+                    Expr::Value(Value::String("false".to_string())),
+                ),
+            ]),
+        };
+
+        let context = Context::new(HashMap::new());
+        let result = cond.eval(&context).unwrap();
+        assert_eq!(result, "true");
+    }
+
+    #[test]
+    fn test_condition_eval_symbol() {
+        let cond = Condition {
+            condition: Expr::Value(Value::Symbol("true".to_string())),
+            branches: HashMap::from([
+                (
+                    "true".to_string(),
+                    Expr::Value(Value::String("true".to_string())),
+                ),
+            ]),
+        };
+
+        let context = Context::new(HashMap::new());
+        let result = cond.eval(&context).unwrap();
+        assert_eq!(result, "true");
+    }
+
+    #[test]
+    fn test_condition_eval_number() {
+        let cond = Condition {
+            condition: Expr::Value(Value::Number(1f64)),
+            branches: HashMap::from([
+                (
+                    "1".to_string(),
+                    Expr::Value(Value::String("1".to_string())),
+                ),
+            ]),
+        };
+
+        let context = Context::new(HashMap::new());
+        let result = cond.eval(&context).unwrap();
+        assert_eq!(result, "1");
+    }
+
+    #[test]
+    fn test_condition_eval_type_error() {
+        let cond = Condition {
+            condition: Expr::Value(Value::Array(vec![])),
             branches: HashMap::new(),
         };
 
@@ -113,7 +183,7 @@ mod tests {
         assert_eq!(
             result,
             Err(Error::TypeError(
-                "Condition must evaluate to a boolean".to_string()
+                "Condition must evaluate to a string".to_string()
             ))
         );
     }

@@ -106,6 +106,10 @@ pub enum BinOp {
     Le,
     Dot,
     Index,
+    Add,
+    Sub,
+    Mul,
+    Div,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -284,8 +288,73 @@ fn parse_unary(input: &str) -> IResult<&str, Expr> {
     ))(input)
 }
 
+fn parse_arithmetic(input: &str) -> IResult<&str, Expr> {
+    let (input, first_term) = parse_term(input)?;
+    
+    let (input, rest) = many0(pair(
+        preceded(
+            nom::character::complete::multispace0,
+            alt((
+                map(char('+'), |_| BinOp::Add),
+                map(char('-'), |_| BinOp::Sub),
+            ))
+        ),
+        preceded(nom::character::complete::multispace0, parse_term)
+    ))(input)?;
+    
+    let result = rest.into_iter().fold(first_term, |acc, (op, term)| {
+        Expr::BinaryOp {
+            op,
+            left: Box::new(acc),
+            right: Box::new(term),
+        }
+    });
+    
+    Ok((input, result))
+}
+
+fn parse_term(input: &str) -> IResult<&str, Expr> {
+    let (input, first_factor) = parse_factor(input)?;
+    
+    let (input, rest) = many0(pair(
+        preceded(
+            nom::character::complete::multispace0,
+            alt((
+                map(char('*'), |_| BinOp::Mul),
+                map(char('/'), |_| BinOp::Div),
+            ))
+        ),
+        preceded(nom::character::complete::multispace0, parse_factor)
+    ))(input)?;
+    
+    let result = rest.into_iter().fold(first_factor, |acc, (op, factor)| {
+        Expr::BinaryOp {
+            op,
+            left: Box::new(acc),
+            right: Box::new(factor),
+        }
+    });
+    
+    Ok((input, result))
+}
+
+fn parse_factor(input: &str) -> IResult<&str, Expr> {
+    alt((
+        // 括弧で囲まれた式
+        delimited(
+            char('('),
+            preceded(
+                nom::character::complete::multispace0,
+                parse_binary
+            ),
+            preceded(nom::character::complete::multispace0, char(')'))
+        ),
+        parse_unary
+    ))(input)
+}
+
 fn parse_binary(input: &str) -> IResult<&str, Expr> {
-    let (input, left) = parse_unary(input)?;
+    let (input, left) = parse_arithmetic(input)?;
 
     let (input, op) = opt(preceded(
         nom::character::complete::multispace0,
@@ -303,7 +372,7 @@ fn parse_binary(input: &str) -> IResult<&str, Expr> {
     match op {
         Some(op) => {
             let (input, right) =
-                preceded(nom::character::complete::multispace0, parse_unary)(input)?;
+                preceded(nom::character::complete::multispace0, parse_arithmetic)(input)?;
             Ok((
                 input,
                 Expr::BinaryOp {
@@ -568,6 +637,123 @@ mod tests {
                         expr: Box::new(Expr::Value(Value::Symbol("suffix".to_string()))),
                     },
                 ],
+            })
+        );
+    }
+
+    #[test]
+    fn test_parse_arithmetic() {
+        // 加算
+        assert_eq!(
+            parse("1 + 2"),
+            Ok(Expr::BinaryOp {
+                op: BinOp::Add,
+                left: Box::new(Expr::Value(Value::Number(1.0))),
+                right: Box::new(Expr::Value(Value::Number(2.0)))
+            })
+        );
+
+        // 減算
+        assert_eq!(
+            parse("5 - 3"),
+            Ok(Expr::BinaryOp {
+                op: BinOp::Sub,
+                left: Box::new(Expr::Value(Value::Number(5.0))),
+                right: Box::new(Expr::Value(Value::Number(3.0)))
+            })
+        );
+
+        // 乗算
+        assert_eq!(
+            parse("2 * 3"),
+            Ok(Expr::BinaryOp {
+                op: BinOp::Mul,
+                left: Box::new(Expr::Value(Value::Number(2.0))),
+                right: Box::new(Expr::Value(Value::Number(3.0)))
+            })
+        );
+
+        // 除算
+        assert_eq!(
+            parse("6 / 2"),
+            Ok(Expr::BinaryOp {
+                op: BinOp::Div,
+                left: Box::new(Expr::Value(Value::Number(6.0))),
+                right: Box::new(Expr::Value(Value::Number(2.0)))
+            })
+        );
+
+        // 演算子の優先順位
+        assert_eq!(
+            parse("1 + 2 * 3"),
+            Ok(Expr::BinaryOp {
+                op: BinOp::Add,
+                left: Box::new(Expr::Value(Value::Number(1.0))),
+                right: Box::new(Expr::BinaryOp {
+                    op: BinOp::Mul,
+                    left: Box::new(Expr::Value(Value::Number(2.0))),
+                    right: Box::new(Expr::Value(Value::Number(3.0)))
+                })
+            })
+        );
+
+        // 括弧による優先順位の変更
+        assert_eq!(
+            parse("(1 + 2) * 3"),
+            Ok(Expr::BinaryOp {
+                op: BinOp::Mul,
+                left: Box::new(Expr::BinaryOp {
+                    op: BinOp::Add,
+                    left: Box::new(Expr::Value(Value::Number(1.0))),
+                    right: Box::new(Expr::Value(Value::Number(2.0)))
+                }),
+                right: Box::new(Expr::Value(Value::Number(3.0)))
+            })
+        );
+
+        // 複雑な式
+        assert_eq!(
+            parse("$base + $tax * $quantity"),
+            Ok(Expr::BinaryOp {
+                op: BinOp::Add,
+                left: Box::new(Expr::UnaryOp {
+                    op: UnaryOp::Dollar,
+                    expr: Box::new(Expr::Value(Value::Symbol("base".to_string())))
+                }),
+                right: Box::new(Expr::BinaryOp {
+                    op: BinOp::Mul,
+                    left: Box::new(Expr::UnaryOp {
+                        op: UnaryOp::Dollar,
+                        expr: Box::new(Expr::Value(Value::Symbol("tax".to_string())))
+                    }),
+                    right: Box::new(Expr::UnaryOp {
+                        op: UnaryOp::Dollar,
+                        expr: Box::new(Expr::Value(Value::Symbol("quantity".to_string())))
+                    })
+                })
+            })
+        );
+
+        // 括弧を使った複雑な式
+        assert_eq!(
+            parse("($base + $tax) * $quantity"),
+            Ok(Expr::BinaryOp {
+                op: BinOp::Mul,
+                left: Box::new(Expr::BinaryOp {
+                    op: BinOp::Add,
+                    left: Box::new(Expr::UnaryOp {
+                        op: UnaryOp::Dollar,
+                        expr: Box::new(Expr::Value(Value::Symbol("base".to_string())))
+                    }),
+                    right: Box::new(Expr::UnaryOp {
+                        op: UnaryOp::Dollar,
+                        expr: Box::new(Expr::Value(Value::Symbol("tax".to_string())))
+                    })
+                }),
+                right: Box::new(Expr::UnaryOp {
+                    op: UnaryOp::Dollar,
+                    expr: Box::new(Expr::Value(Value::Symbol("quantity".to_string())))
+                })
             })
         );
     }
